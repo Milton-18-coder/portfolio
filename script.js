@@ -634,29 +634,7 @@ function initContactForm() {
       submitBtn.innerHTML = `Sending... <i class="fa-solid fa-circle-notch fa-spin"></i>`;
       submitBtn.style.background = "linear-gradient(135deg, var(--secondary), var(--primary))";
 
-      fetch("https://formsubmit.co/ajax/miltonjoshwa20@gmail.com", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({
-          name: nameInput.value,
-          email: emailInput.value,
-          subject: subjectInput.value,
-          message: messageInput.value
-        })
-      })
-      .then(response => {
-        if (!response.ok) throw new Error("Network error");
-        return response.json();
-      })
-      .then(data => {
-        if (data.success === "false" || data.success === false) {
-          throw new Error(data.message || "FormSubmit rejected submission");
-        }
-        
-        // Success state
+      const handleSuccess = () => {
         submitBtn.innerHTML = `Message Sent! <i class="fa-solid fa-check"></i>`;
         submitBtn.style.background = "#22c55e"; // success green
         form.reset();
@@ -671,8 +649,9 @@ function initContactForm() {
           submitBtn.innerHTML = originalText;
           submitBtn.style.background = "";
         }, 3000);
-      })
-      .catch(error => {
+      };
+
+      const handleError = (error) => {
         console.error("Form submission error:", error);
         submitBtn.innerHTML = `Error sending! <i class="fa-solid fa-triangle-exclamation"></i>`;
         submitBtn.style.background = "#ef4444"; // error red
@@ -682,7 +661,39 @@ function initContactForm() {
           submitBtn.innerHTML = originalText;
           submitBtn.style.background = "";
         }, 3000);
-      });
+      };
+
+      // FormSubmit AJAX API does not support file:// protocol (Origin header is null).
+      // We simulate successful submission for local testing, and do the real fetch in http/https.
+      if (window.location.protocol === "file:") {
+        console.warn("Local File Mode: FormSubmit API doesn't support file:// origins. Simulating successful send.");
+        setTimeout(handleSuccess, 1200);
+      } else {
+        fetch("https://formsubmit.co/ajax/miltonjoshwa20@gmail.com", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            name: nameInput.value,
+            email: emailInput.value,
+            subject: subjectInput.value,
+            message: messageInput.value
+          })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error("Network error");
+          return response.json();
+        })
+        .then(data => {
+          if (data.success === "false" || data.success === false) {
+            throw new Error(data.message || "FormSubmit rejected submission");
+          }
+          handleSuccess();
+        })
+        .catch(handleError);
+      }
     }
   });
 
@@ -727,8 +738,8 @@ async function fetchGitHubRepos() {
     if (!response.ok) throw new Error("Failed to fetch repositories");
     let repos = await response.json();
     
-    // Filter out forks
-    repos = repos.filter(repo => !repo.fork);
+    // Filter out forks and portfolio repository
+    repos = repos.filter(repo => !repo.fork && repo.name.toLowerCase() !== "portfolio");
     
     if (repos.length === 0) {
       grid.innerHTML = `<p class="error-msg" style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No public repositories found for ${username}.</p>`;
@@ -746,7 +757,11 @@ async function fetchGitHubRepos() {
       
       // Use custom image for Library Management repositories
       if (repo.name.toLowerCase().includes("library")) {
-        imageUrl = "library_management.png";
+        if (repo.name.toLowerCase().includes("console")) {
+          imageUrl = "library_management_console.png";
+        } else {
+          imageUrl = "library_management.png";
+        }
       }
       
       // Determine category based on repo language or topics
@@ -760,6 +775,9 @@ async function fetchGitHubRepos() {
         category = "Web App";
       }
 
+      // Determine if a live preview exists, fallback to localhost:8080 for springboot backend
+      const liveUrl = repo.homepage || (repo.name.toLowerCase().includes("springboot") ? "http://localhost:8080" : null);
+
       // Map dynamic project data for case study modals
       fetchedProjectData[id] = {
         title: formatRepoName(repo.name),
@@ -771,7 +789,7 @@ async function fetchGitHubRepos() {
         technologies: getRepoTechnologies(repo),
         image: imageUrl,
         repo: repo.html_url,
-        live: repo.homepage || repo.html_url
+        live: liveUrl || repo.html_url
       };
 
       // Create tags
@@ -802,7 +820,7 @@ async function fetchGitHubRepos() {
               <button class="project-btn-detail" onclick="openFetchedProjectModal(${id})">View Case Study <i class="fa-solid fa-arrow-right"></i></button>
               <div class="project-external-links">
                 <a href="${repo.html_url}" target="_blank" aria-label="GitHub Repository"><i class="fa-brands fa-github"></i></a>
-                ${repo.homepage ? `<a href="${repo.homepage}" target="_blank" aria-label="Live Demo"><i class="fa-solid fa-arrow-up-right-from-square"></i>` : ""}
+                ${liveUrl ? `<a href="${liveUrl}" target="_blank" aria-label="Live Demo"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
               </div>
             </div>
           </div>
